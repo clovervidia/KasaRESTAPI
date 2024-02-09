@@ -99,6 +99,102 @@ namespace KasaRESTAPI
                 }
             });
 
+            app.MapGet("/api/{macAddress}/countdown/all", (string macAddress) =>
+            {
+                if (!devices.TryGetValue(macAddress, out var device))
+                {
+                    return Results.NotFound(new ErrorResponse($"Couldn't find a device with MAC address: '{macAddress}'"));
+                }
+
+                if (!device.CountdownTimer)
+                {
+                    return Results.BadRequest(new ErrorResponse($"The device '{macAddress}' does not support countdown rules."));
+                }
+
+                var countdownRules = device.GetAllCountdownRules().CountDown.GetRules.Rules.Select(r => new CountdownRule(r.Id, r.Name, r.Enable == 1, r.Delay, r.Action == 1, r.Remain)).ToList();
+                return Results.Ok(countdownRules);
+            });
+
+            app.MapPost("/api/{macAddress}/countdown/new", (string macAddress, NewCountdownRule newRule) =>
+            {
+                if (!devices.TryGetValue(macAddress, out var device))
+                {
+                    return Results.NotFound(new ErrorResponse($"Couldn't find a device with MAC address: '{macAddress}'"));
+                }
+
+                if (!device.CountdownTimer)
+                {
+                    return Results.BadRequest(new ErrorResponse($"The device '{macAddress}' does not support countdown rules."));
+                }
+
+                var ruleName = newRule.Name;
+                if (ruleName.Length > 32)
+                {
+                    ruleName = ruleName[0..32];
+                }
+
+                var response = device.AddCountdownRule(newRule.Enabled, newRule.Delay, newRule.Action, ruleName);
+                if (response.CountDown.AddRule.ErrorCode != 0)
+                {
+                    return Results.BadRequest(new ErrorResponse(response.CountDown.AddRule.ErrorMessage));
+                }
+
+                return Results.Ok();
+            });
+
+            app.MapDelete("/api/{macAddress}/countdown/all", (string macAddress) =>
+            {
+                if (!devices.TryGetValue(macAddress, out var device))
+                {
+                    return Results.NotFound(new ErrorResponse($"Couldn't find a device with MAC address: '{macAddress}'"));
+                }
+
+                if (!device.CountdownTimer)
+                {
+                    return Results.BadRequest(new ErrorResponse($"The device '{macAddress}' does not support countdown rules."));
+                }
+
+                device.DeleteAllCountdownRules();
+
+                return Results.Ok();
+            });
+
+            app.MapDelete("/api/{macAddress}/countdown/{ruleId}", (string macAddress, string ruleId) =>
+            {
+                if (!devices.TryGetValue(macAddress, out var device))
+                {
+                    return Results.NotFound(new ErrorResponse($"Couldn't find a device with MAC address: '{macAddress}'"));
+                }
+
+                if (!device.CountdownTimer)
+                {
+                    return Results.BadRequest(new ErrorResponse($"The device '{macAddress}' does not support countdown rules."));
+                }
+
+                if (ruleId.Length != 32)
+                {
+                    return Results.BadRequest(new ErrorResponse("Countdown rule ID must be 32 characters long."));
+                }
+
+                ruleId = ruleId.ToUpper();
+
+                foreach (var character in ruleId)
+                {
+                    if (!char.IsNumber(character) && (character < 'A' || character > 'F'))
+                    {
+                        return Results.BadRequest(new ErrorResponse("Countdown rule ID must contain only hexadecimal characters."));
+                    }
+                }
+
+                var response = device.DeleteCountdownRule(ruleId);
+                if (response.CountDown.DeleteRule.ErrorCode != 0)
+                {
+                    return Results.BadRequest(new ErrorResponse(response.CountDown.DeleteRule.ErrorMessage));
+                }
+
+                return Results.Ok();
+            });
+
             app.Run();
         }
 
@@ -106,5 +202,7 @@ namespace KasaRESTAPI
         record ErrorResponse(string Error);
         record EnergyMonitor(double Voltage, double Current, double Power, double Total);
         record OutletState(bool State);
+        record CountdownRule(string Id, string Name, bool Enabled, int Delay, bool Action, int Remain);
+        record NewCountdownRule(string Name, bool Enabled, int Delay, bool Action);
     }
 }
