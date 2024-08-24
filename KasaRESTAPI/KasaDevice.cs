@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Mail;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -87,7 +86,7 @@ namespace KasaAPI
                             return;
                         }
 
-                        if (!devices.TryGetValue(decodedResponse.System.GetSysInfo.MAC, out _))
+                        if (!devices.TryGetValue(decodedResponse.System.GetSysInfo.MAC, out _) || devices[decodedResponse.System.GetSysInfo.MAC].deviceAddress != RemoteIpEndPoint.Address.ToString())
                         {
                             devices[decodedResponse.System.GetSysInfo.MAC] = new KasaDevice(RemoteIpEndPoint.Address.ToString());
                         }
